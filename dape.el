@@ -2548,7 +2548,43 @@ Use SKIP-COMPILE to skip compilation."
         (dape--compile config)
       (setq dape--connection
             (dape--create-connection config))
-      (dape--start-debugging dape--connection))))
+       (dape--start-debugging dape--connection))))
+
+
+
+;;;###autoload
+(defun dape-prepare (config &optional skip-compile)
+  "Start debugging session.
+Start a debugging session for CONFIG.
+See `dape-configs' for more information on CONFIG.
+
+When called as an interactive command, the first symbol like
+is read as key in the `dape-configs' alist and rest as elements
+which override value plist in `dape-configs'.
+
+Interactive example:
+  launch :program \"bin\"
+
+Executes alist key `launch' in `dape-configs' with :program as \"bin\".
+
+Use SKIP-COMPILE to skip compilation."
+  (interactive (list (dape--read-config)))
+  (dape--with-request (dape-kill (dape--live-connection 'parent t))
+    (dape--config-ensure config t)
+    ;; Hooks need to be run before any repl messaging but after we
+    ;; have ensured that config is executable.
+    (run-hooks 'dape-on-start-hooks)
+    (when-let ((fn (or (plist-get config 'fn) 'identity))
+               (fns (or (and (functionp fn) (list fn))
+                        (and (listp fn) fn))))
+      (setq config
+            (seq-reduce (lambda (config fn) (funcall fn config))
+                        (append fns dape-default-config-functions)
+                        (copy-tree config))))
+    (if (and (not skip-compile) (plist-get config 'compile))
+        (dape--compile config)
+      (setq dape--connection
+            (dape--create-connection config)))))
 
 
 ;;; Compile
